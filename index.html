@@ -132,12 +132,13 @@
       const day = String(d.getDate()).padStart(2,'0');
       return `${y}-${m}-${day}`;
     }
-    // D-Day 계산
+    // D-Day 계산 (Math.floor 사용)
     function calcDDay(target) {
       const today = new Date();
       const t = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-      const diff = (new Date(target) - t) / 86400000;
-      return Math.ceil(diff);
+      const nd = new Date(target);
+      const diff = (nd - t) / 86400000;
+      return Math.floor(diff);
     }
     // 렌더링
     function renderTasks() {
