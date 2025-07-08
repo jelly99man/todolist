@@ -18,8 +18,8 @@
     }
     * { box-sizing: border-box; margin:0; padding:0; }
     body {
-      background: var(--bg);
       font-family: 'Inter', sans-serif;
+      background: var(--bg);
       display: flex;
       justify-content: center;
       align-items: start;
@@ -122,7 +122,8 @@
     </div>
     <ul id="task-list"></ul>
     <div class="summary">
-      체크 횟수: <span id="check-count">0</span>
+      <div>에이미 체크 횟수: <span id="count-amy">0</span></div>
+      <div>고자 체크 횟수: <span id="count-goja">0</span></div>
     </div>
   </div>
 
@@ -130,13 +131,13 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
   <script>
-    // 초기화 전 주차별 기본 tasks
+    // 초기 주차별 기본 tasks
     const initialTasks = [
       { text: '에이미', checked: false },
       { text: '고자', checked: false }
     ];
 
-    // 1) Firebase 설정 (콘솔에서 복사한 config 객체로 교체하세요)
+    // 1) Firebase 설정 (콘솔에서 복사한 config)
     const firebaseConfig = {
       apiKey: "AIzaSyDyRPi-78vbxzVP0f5z06qtqwrkM-cIXdc",
       authDomain: "todo-960de.firebaseapp.com",
@@ -170,7 +171,7 @@
       return Math.floor((nd - today) / 86400000);
     }
 
-    // 실시간 구독하고 렌더
+    // 실시간 구독 & 렌더
     let currentTasks = [];
     function subscribe() {
       widgetRef.onSnapshot(doc => {
@@ -187,8 +188,10 @@
           ? getComputedStyle(document.documentElement).getPropertyValue('--warning')
           : getComputedStyle(document.documentElement).getPropertyValue('--accent');
 
-        // 체크 횟수 표시
-        document.getElementById('check-count').textContent = data.checkCount || 0;
+        // 체크 횟수 렌더
+        const counts = data.checkCounts || {};
+        document.getElementById('count-amy').textContent = counts['에이미'] || 0;
+        document.getElementById('count-goja').textContent = counts['고자'] || 0;
 
         // 투두 리스트 렌더
         currentTasks = data.tasks || [];
@@ -210,7 +213,7 @@
       });
     }
 
-    // 체크 토글 핸들러: D-Day 이전에만 count++
+    // 체크 토글 핸들러: D-Day 이전에만 개별 카운트++
     function onToggle(idx, checked) {
       const nextMon = nextMonday(new Date());
       const dd = calcDDay(formatDate(nextMon));
@@ -220,16 +223,17 @@
       // tasks 배열 업데이트
       widgetRef.update({
         tasks: firebase.firestore.FieldValue.arrayRemove(task)
-      }).then(() =>
+      }).then(() => 
         widgetRef.update({
           tasks: firebase.firestore.FieldValue.arrayUnion(updated)
         })
       );
 
-      // D-Day 전 체크 시만 count 증가
+      // D-Day 전 체크 시 해당 이름 카운트 증가
       if (checked && dd >= 0) {
+        const name = task.text; // '에이미' 또는 '고자'
         widgetRef.update({
-          checkCount: firebase.firestore.FieldValue.increment(1)
+          [`checkCounts.${name}`]: firebase.firestore.FieldValue.increment(1)
         });
       }
     }
@@ -241,14 +245,14 @@
 
       widgetRef.get().then(doc => {
         if (!doc.exists) {
-          // 첫 생성: weekId, tasks, checkCount 초기화
+          // 첫 생성 시
           widgetRef.set({
             weekId,
             tasks: initialTasks,
-            checkCount: 0
+            checkCounts: { '에이미': 0, '고자': 0 }
           });
         } else if (doc.data().weekId !== weekId) {
-          // 새 주: tasks만 초기화, checkCount는 누적
+          // 새 주에는 tasks만 초기화, checkCounts는 그대로 누적
           widgetRef.update({
             weekId,
             tasks: initialTasks
