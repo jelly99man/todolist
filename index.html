@@ -18,10 +18,11 @@
     }
     * { box-sizing: border-box; margin:0; padding:0; }
     body {
-      font-family: 'Inter', sans-serif;
       background: var(--bg);
+      font-family: 'Inter', sans-serif;
       display: flex;
       justify-content: center;
+      align-items: start;
       padding: 40px;
     }
     .widget {
@@ -32,40 +33,82 @@
       padding: 24px;
     }
     .widget h1 {
-      font-size: 20px; font-weight: 600; color: var(--text-main);
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--text-main);
       margin-bottom: 16px;
     }
     .deadline {
-      display: flex; justify-content: space-between; align-items: center;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
       margin-bottom: 24px;
     }
-    .deadline .date { color: var(--text-sub); font-size:14px; }
+    .deadline .date {
+      color: var(--text-sub);
+      font-size: 14px;
+    }
     .deadline .d-day {
-      font-size:14px; font-weight:600; padding:4px 12px; border-radius:12px; color:#fff;
+      font-size: 14px;
+      font-weight: 600;
+      padding: 4px 12px;
+      border-radius: 12px;
+      color: #FFF;
     }
     ul {
-      list-style:none; border-top:1px solid #ECECEC; margin-bottom:16px;
+      list-style: none;
+      border-top: 1px solid #ECECEC;
+      margin-bottom: 16px;
     }
     li {
-      display:flex; justify-content:space-between; align-items:center;
-      padding:12px 0; border-bottom:1px solid #ECECEC;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 0;
+      border-bottom: 1px solid #ECECEC;
     }
-    .task-text { font-size:16px; color:var(--text-main); }
-    .toggle { position:relative; width:40px; height:20px; }
-    .toggle input { position:absolute; opacity:0; width:100%; height:100%; cursor:pointer; }
+    .task-text {
+      font-size: 16px;
+      color: var(--text-main);
+    }
+    .toggle {
+      position: relative;
+      width: 40px;
+      height: 20px;
+    }
+    .toggle input {
+      position: absolute;
+      opacity: 0;
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      cursor: pointer;
+    }
     .slider {
-      position:absolute; top:0; left:0; right:0; bottom:0;
-      background:#CCC; border-radius:10px; transition:0.3s;
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: #CCC;
+      border-radius: 10px;
+      transition: 0.3s;
     }
     .slider::before {
-      content:''; position:absolute; width:16px; height:16px;
-      left:2px; bottom:2px; background:#FFF; border-radius:50%; transition:0.3s;
+      content: '';
+      position: absolute;
+      width: 16px; height: 16px;
+      left: 2px; bottom: 2px;
+      background: #FFF;
+      border-radius: 50%;
+      transition: 0.3s;
     }
-    input:checked + .slider { background: var(--accent); }
-    input:checked + .slider::before { transform: translateX(20px); }
-
+    input:checked + .slider {
+      background: var(--accent);
+    }
+    input:checked + .slider::before {
+      transform: translateX(20px);
+    }
     .summary {
-      font-size: 14px; color: var(--text-sub);
+      font-size: 14px;
+      color: var(--text-sub);
       text-align: right;
     }
   </style>
@@ -87,7 +130,13 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
   <script>
-    // 1) Firebase 설정 (Firebase 콘솔에서 복사한 config 객체로 교체하세요)
+    // 초기화 전 주차별 기본 tasks
+    const initialTasks = [
+      { text: '에이미', checked: false },
+      { text: '고자', checked: false }
+    ];
+
+    // 1) Firebase 설정 (콘솔에서 복사한 config 객체로 교체하세요)
     const firebaseConfig = {
       apiKey: "AIzaSyDyRPi-78vbxzVP0f5z06qtqwrkM-cIXdc",
       authDomain: "todo-960de.firebaseapp.com",
@@ -97,12 +146,11 @@
       appId: "1:507377294926:web:1b4dce09ad9d001b9c6d1f",
       measurementId: "G-PLE4839CXY"
     };
-    // 2) Firebase 초기화
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
     const widgetRef = db.collection('widgets').doc('weeklyTodo');
 
-    // --- 날짜/시간 유틸 함수 ---
+    // 날짜/시간 유틸
     function nextMonday(from) {
       const d = new Date(from);
       const diff = (8 - d.getDay()) % 7 || 7;
@@ -110,7 +158,10 @@
       return d;
     }
     function formatDate(d) {
-      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
     }
     function calcDDay(target) {
       const today = new Date();
@@ -119,14 +170,14 @@
       return Math.floor((nd - today) / 86400000);
     }
 
-    // --- 실시간 구독 & 렌더 함수 ---
+    // 실시간 구독하고 렌더
     let currentTasks = [];
     function subscribe() {
       widgetRef.onSnapshot(doc => {
         if (!doc.exists) return;
         const data = doc.data();
 
-        // 마감일 및 D-Day 렌더
+        // 마감일 & D-Day 표시
         const nextMon = nextMonday(new Date());
         document.getElementById('deadline-date').textContent = `마감일: ${formatDate(nextMon)}`;
         const dd = calcDDay(formatDate(nextMon));
@@ -136,10 +187,10 @@
           ? getComputedStyle(document.documentElement).getPropertyValue('--warning')
           : getComputedStyle(document.documentElement).getPropertyValue('--accent');
 
-        // 체크 횟수 렌더
+        // 체크 횟수 표시
         document.getElementById('check-count').textContent = data.checkCount || 0;
 
-        // 리스트 렌더
+        // 투두 리스트 렌더
         currentTasks = data.tasks || [];
         const ul = document.getElementById('task-list');
         ul.innerHTML = '';
@@ -148,7 +199,7 @@
           li.innerHTML = `
             <span class="task-text">${t.text}</span>
             <label class="toggle">
-              <input type="checkbox"${t.checked?' checked':''}>
+              <input type="checkbox"${t.checked ? ' checked' : ''}>
               <span class="slider"></span>
             </label>`;
           li.querySelector('input').addEventListener('change', e => {
@@ -159,7 +210,7 @@
       });
     }
 
-    // --- 체크 토글 핸들러: D-Day 전이면 checkCount 증가 ---
+    // 체크 토글 핸들러: D-Day 이전에만 count++
     function onToggle(idx, checked) {
       const nextMon = nextMonday(new Date());
       const dd = calcDDay(formatDate(nextMon));
@@ -169,13 +220,13 @@
       // tasks 배열 업데이트
       widgetRef.update({
         tasks: firebase.firestore.FieldValue.arrayRemove(task)
-      }).then(() => {
-        return widgetRef.update({
+      }).then(() =>
+        widgetRef.update({
           tasks: firebase.firestore.FieldValue.arrayUnion(updated)
-        });
-      });
+        })
+      );
 
-      // D-Day 이전에 체크했으면 count++
+      // D-Day 전 체크 시만 count 증가
       if (checked && dd >= 0) {
         widgetRef.update({
           checkCount: firebase.firestore.FieldValue.increment(1)
@@ -183,16 +234,24 @@
       }
     }
 
-    // --- 초기화 & 구독 시작 ---
+    // 초기화 & 주차별 리셋 로직
     document.addEventListener('DOMContentLoaded', () => {
+      const nextMon = nextMonday(new Date());
+      const weekId = formatDate(nextMon);
+
       widgetRef.get().then(doc => {
         if (!doc.exists) {
+          // 첫 생성: weekId, tasks, checkCount 초기화
           widgetRef.set({
-            tasks: [
-              { text: '에이미', checked: false },
-              { text: '고자', checked: false }
-            ],
+            weekId,
+            tasks: initialTasks,
             checkCount: 0
+          });
+        } else if (doc.data().weekId !== weekId) {
+          // 새 주: tasks만 초기화, checkCount는 누적
+          widgetRef.update({
+            weekId,
+            tasks: initialTasks
           });
         }
         subscribe();
