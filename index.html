@@ -107,9 +107,11 @@
       transform: translateX(20px);
     }
     .summary {
+      display: flex;
+      justify-content: space-between;
       font-size: 14px;
       color: var(--text-sub);
-      text-align: right;
+      margin-top: 8px;
     }
   </style>
 </head>
@@ -122,8 +124,8 @@
     </div>
     <ul id="task-list"></ul>
     <div class="summary">
-      <div>에이미 체크 횟수: <span id="count-amy">0</span></div>
-      <div>고자 체크 횟수: <span id="count-goja">0</span></div>
+      <span>에이미: <strong id="count-amy">0</strong></span>
+      <span>고자: <strong id="count-goja">0</strong></span>
     </div>
   </div>
 
@@ -131,13 +133,11 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
   <script>
-    // 초기 주차별 기본 tasks
     const initialTasks = [
       { text: '에이미', checked: false },
       { text: '고자', checked: false }
     ];
 
-    // 1) Firebase 설정 (콘솔에서 복사한 config)
     const firebaseConfig = {
       apiKey: "AIzaSyDyRPi-78vbxzVP0f5z06qtqwrkM-cIXdc",
       authDomain: "todo-960de.firebaseapp.com",
@@ -151,7 +151,6 @@
     const db = firebase.firestore();
     const widgetRef = db.collection('widgets').doc('weeklyTodo');
 
-    // 날짜/시간 유틸
     function nextMonday(from) {
       const d = new Date(from);
       const diff = (8 - d.getDay()) % 7 || 7;
@@ -159,26 +158,20 @@
       return d;
     }
     function formatDate(d) {
-      const y = d.getFullYear();
-      const m = String(d.getMonth() + 1).padStart(2, '0');
-      const day = String(d.getDate()).padStart(2, '0');
-      return `${y}-${m}-${day}`;
+      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
     }
     function calcDDay(target) {
       const today = new Date();
       today.setHours(0,0,0,0);
-      const nd = new Date(target);
-      return Math.floor((nd - today) / 86400000);
+      return Math.floor((new Date(target) - today) / 86400000);
     }
 
-    // 실시간 구독 & 렌더
     let currentTasks = [];
     function subscribe() {
       widgetRef.onSnapshot(doc => {
         if (!doc.exists) return;
         const data = doc.data();
 
-        // 마감일 & D-Day 표시
         const nextMon = nextMonday(new Date());
         document.getElementById('deadline-date').textContent = `마감일: ${formatDate(nextMon)}`;
         const dd = calcDDay(formatDate(nextMon));
@@ -188,21 +181,23 @@
           ? getComputedStyle(document.documentElement).getPropertyValue('--warning')
           : getComputedStyle(document.documentElement).getPropertyValue('--accent');
 
-        // 체크 횟수 렌더
         const counts = data.checkCounts || {};
         document.getElementById('count-amy').textContent = counts['에이미'] || 0;
         document.getElementById('count-goja').textContent = counts['고자'] || 0;
 
-        // 투두 리스트 렌더
         currentTasks = data.tasks || [];
+        // 고정 순서: 에이미 먼저, 고자 다음
+        const order = ['에이미','고자'];
+        currentTasks.sort((a,b) => order.indexOf(a.text) - order.indexOf(b.text));
+
         const ul = document.getElementById('task-list');
         ul.innerHTML = '';
-        currentTasks.forEach((t, i) => {
+        currentTasks.forEach((t,i) => {
           const li = document.createElement('li');
           li.innerHTML = `
             <span class="task-text">${t.text}</span>
             <label class="toggle">
-              <input type="checkbox"${t.checked ? ' checked' : ''}>
+              <input type="checkbox"${t.checked?' checked':''}>
               <span class="slider"></span>
             </label>`;
           li.querySelector('input').addEventListener('change', e => {
@@ -213,46 +208,40 @@
       });
     }
 
-    // 체크 토글 핸들러: D-Day 이전에만 개별 카운트++
     function onToggle(idx, checked) {
       const nextMon = nextMonday(new Date());
       const dd = calcDDay(formatDate(nextMon));
       const task = currentTasks[idx];
       const updated = { ...task, checked };
 
-      // tasks 배열 업데이트
       widgetRef.update({
         tasks: firebase.firestore.FieldValue.arrayRemove(task)
-      }).then(() => 
+      }).then(() =>
         widgetRef.update({
           tasks: firebase.firestore.FieldValue.arrayUnion(updated)
         })
       );
 
-      // D-Day 전 체크 시 해당 이름 카운트 증가
       if (checked && dd >= 0) {
-        const name = task.text; // '에이미' 또는 '고자'
+        const name = task.text;
         widgetRef.update({
           [`checkCounts.${name}`]: firebase.firestore.FieldValue.increment(1)
         });
       }
     }
 
-    // 초기화 & 주차별 리셋 로직
     document.addEventListener('DOMContentLoaded', () => {
       const nextMon = nextMonday(new Date());
       const weekId = formatDate(nextMon);
 
       widgetRef.get().then(doc => {
         if (!doc.exists) {
-          // 첫 생성 시
           widgetRef.set({
             weekId,
             tasks: initialTasks,
             checkCounts: { '에이미': 0, '고자': 0 }
           });
         } else if (doc.data().weekId !== weekId) {
-          // 새 주에는 tasks만 초기화, checkCounts는 그대로 누적
           widgetRef.update({
             weekId,
             tasks: initialTasks
